@@ -1,0 +1,10 @@
+name: BlockyWending
+version: 1.0
+author: cryptohog
+main: fi.blocky.blockywending.bukkit.BlockyWending
+api-version: 1.20
+description: Automated chest wending machines built by players
+folia-supported: true
+
+commands:
+  # No commands are used in this plugin.
