@@ -1,9 +1,9 @@
-name: BlockyWending
+name: BlockyVending
 version: 1.0
 author: cryptohog
-main: fi.blocky.blockywending.bukkit.BlockyWending
+main: fi.blocky.blockyvending.bukkit.BlockyVending
 api-version: 1.20
-description: Automated chest wending machines built by players
+description: Automated chest vending machines built by players
 folia-supported: true
 
 commands:
