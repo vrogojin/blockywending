@@ -3,6 +3,7 @@ package fi.blocky.blockyvending.bukkit;
 import io.papermc.paper.threadedregions.scheduler.RegionScheduler;
 import io.papermc.paper.threadedregions.scheduler.ScheduledTask;
 
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -16,14 +17,21 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.SignChangeEvent;
+import org.bukkit.event.inventory.InventoryClickEvent;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.util.BlockVector;
 
-import java.util.HashMap;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Logger;
 
 public class BlockyVending extends JavaPlugin implements Listener {
@@ -31,6 +39,8 @@ public class BlockyVending extends JavaPlugin implements Listener {
     private static BlockyVending instance;
 
     private RegionScheduler regionScheduler;
+
+    private final ConcurrentMap<UUID, Inventory> playerGuis = new ConcurrentHashMap<>();
 
     @Override
     public void onEnable() {
@@ -67,17 +77,95 @@ public class BlockyVending extends JavaPlugin implements Listener {
 
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent event) {
-	if (event.getAction() == Action.LEFT_CLICK_BLOCK && 
-    	    (event.getClickedBlock().getType() == Material.CHEST || event.getClickedBlock().getType() == Material.TRAPPED_CHEST)) {
-        
-    	    BlockState state = event.getClickedBlock().getRelative(BlockFace.UP).getState();
-    	    if (state instanceof Sign) {
-        	Sign sign = (Sign) state;
-        	if (sign.getLine(0).equalsIgnoreCase("[VENDING]")) {
-            	    processPurchase(event.getPlayer(), sign, (Chest) event.getClickedBlock().getState());
-        	}
-    	    }
+/*	if (event.getAction() == Action.RIGHT_CLICK_BLOCK) {
+	    Block clickedBlock = event.getClickedBlock();
+	    if (clickedBlock != null) {
+		BlockState signState = clickedBlock.getState();
+		if(signState instanceof Sign){
+		    Sign sign = (Sign) signState;
+		    if (sign.getLine(0).equalsIgnoreCase("[VENDING]")) {
+			BlockState chestState = clickedBlock.getRelative(BlockFace.DOWN).getState();
+			if(chestState instanceof Chest){
+			    Chest chest = (Chest)chestState;
+			    // Create a custom inventory to show the player
+                	    Inventory customInv = createVendingGUI(chest);
+
+                	    // Open the custom inventory for the player
+                	    Player player = event.getPlayer();
+                	    player.openInventory(customInv);
+			}
+		    }
+		}
+	    }
+	} else*/
+	if (event.getAction() == Action.LEFT_CLICK_BLOCK){
+	    Block clickedBlock = event.getClickedBlock();
+	    if(clickedBlock == null)return;
+	    BlockState blockState = clickedBlock.getState();
+	    if (event.getClickedBlock().getType() == Material.CHEST || event.getClickedBlock().getType() == Material.TRAPPED_CHEST) {
+    		BlockState state = clickedBlock.getRelative(BlockFace.UP).getState();
+    		if (state instanceof Sign) {
+        	    Sign sign = (Sign) state;
+        	    if (sign.getLine(0).equalsIgnoreCase("[VENDING]")) {
+            		processPurchase(event.getPlayer(), sign, (Chest) event.getClickedBlock().getState());
+        	    }
+    		}
+	    }else if(blockState instanceof Sign){
+		    Sign sign = (Sign) blockState;
+		    if (sign.getLine(0).equalsIgnoreCase("[VENDING]")) {
+			BlockState chestState = clickedBlock.getRelative(BlockFace.DOWN).getState();
+			if(chestState instanceof Chest){
+			    Chest chest = (Chest)chestState;
+			    // Create a custom inventory to show the player
+                	    Inventory customInv = createVendingGUI(chest);
+
+                	    // Open the custom inventory for the player
+                	    Player player = event.getPlayer();
+			    registerGui(player, customInv);
+                	    player.openInventory(customInv);
+			}
+		    }
+		}
 	}
+    }
+
+    @EventHandler
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player)) return;
+        
+        Player player = (Player) event.getWhoClicked();
+        
+        if (isGui(player, event.getClickedInventory())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onInventoryClose(InventoryCloseEvent event) {
+        if (!(event.getPlayer() instanceof Player)) return;
+        
+        Player player = (Player) event.getPlayer();
+        
+        deregisterGui(player);
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent event) {
+        deregisterGui(event.getPlayer());
+    }
+
+    private Inventory createVendingGUI(Chest chest) {
+        // Create a custom inventory with a size of 9 rows (one chest row)
+        Inventory customInv = Bukkit.createInventory(null, chest.getInventory().getSize(), "Vending Chest");
+        
+        // Add the chest's items to the custom inventory, excluding emeralds, emerald blocks, and bedrock
+        for (ItemStack item : chest.getInventory().getContents()) {
+            if (item != null && item.getType() != Material.EMERALD && item.getType() != Material.EMERALD_BLOCK && item.getType() != Material.BEDROCK) {
+                customInv.addItem(item.clone()); // Use clone to avoid altering the original item
+            }
+        }
+        
+        return customInv;
     }
 
     private void processPurchase(Player player, Sign sign, Chest chest) {
@@ -273,7 +361,7 @@ public class BlockyVending extends JavaPlugin implements Listener {
 	Material material = item.getType();
 
 	// If item is stackable, check for existing stacks to add to
-	if (material.getMaxStackSize()>1) {
+	if ((material.getMaxStackSize()>1)&&(!hasSpecialProperties(item))) {
     	    // Distribute item among slots with same material
     	    for (int i = 0; i < inventory.getSize(); i++) {
         	ItemStack currentStack = inventory.getItem(i);
@@ -308,5 +396,29 @@ public class BlockyVending extends JavaPlugin implements Listener {
     private void revertTransaction(Inventory playerInv, Inventory chestInv, ItemStack[] playerSnapshot, ItemStack[] chestSnapshot){
 	playerInv.setContents(playerSnapshot);
 	chestInv.setContents(chestSnapshot);
+    }
+
+    private boolean hasSpecialProperties(ItemStack item){
+	if(!item.hasItemMeta())return false;
+	
+	ItemStack defaultItem = new ItemStack(item.getType());
+	ItemMeta defaultMeta = defaultItem.getItemMeta();
+	ItemMeta itemMeta = item.getItemMeta();
+
+	return itemMeta != null && !itemMeta.equals(defaultMeta);
+    }
+
+    private void registerGui(Player player, Inventory gui) {
+        playerGuis.put(player.getUniqueId(), gui);
+    }
+
+    private boolean isGui(Player player, Inventory inventory) {
+	if(playerGuis.containsKey(player.getUniqueId()))
+    	    return playerGuis.get(player.getUniqueId()).equals(inventory);
+	return false;
+    }
+
+    private void deregisterGui(Player player) {
+        playerGuis.remove(player.getUniqueId());
     }
 }
