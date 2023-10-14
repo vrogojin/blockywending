@@ -252,7 +252,7 @@ public class BlockyVending extends JavaPlugin implements Listener {
 	if ((totalEmeraldBlocks * 9 + totalEmeralds > price-9)&&(totalEmeraldBlocks * 9 + totalEmeralds < price)) {
     	    // Look for the change in the Vending chest
     	    int neededEmeralds = price - (totalEmeraldBlocks * 9 + totalEmeralds);
-	    getLogger().info("neededEmeralds: "+neededEmeralds);
+//	    getLogger().info("neededEmeralds: "+neededEmeralds);
     	    for (int i = 0; i < chestInv.getSize(); i++) {
         	ItemStack item = chestInv.getItem(i);
 //		getLogger().info("chest: "+i+":"+item.getAmount());
@@ -283,10 +283,10 @@ public class BlockyVending extends JavaPlugin implements Listener {
 	    }
 	}
 
-	getLogger().info("totalEmeraldBlocks: "+totalEmeraldBlocks);
+/*	getLogger().info("totalEmeraldBlocks: "+totalEmeraldBlocks);
 	getLogger().info("totalEmeralds: "+totalEmeralds);
 	getLogger().info("chestEmeralds: "+chestEmeralds);
-	getLogger().info("price: "+price);
+	getLogger().info("price: "+price);*/
 //	if ((totalEmeraldBlocks * 9 + totalEmeralds + chestPaymentSlots.values().stream().mapToInt(Integer::intValue).sum()) == price) {
 	if(totalEmeraldBlocks * 9 + totalEmeralds - chestEmeralds == price){
     	    Map<String, Map<Integer, Integer>> result = new HashMap<>();
